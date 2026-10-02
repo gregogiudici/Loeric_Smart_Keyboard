@@ -1,0 +1,9 @@
+[submodule "Modules/JUCE"]
+	path = Modules/JUCE
+	url = https://github.com/juce-framework/JUCE.git
+[submodule "Modules/fatar_sl_link"]
+	path = Modules/fatar_sl_link
+	url = https://github.com/fatarsrl/fatar_sl_link.git
+[submodule "Modules/FluidLite"]
+	path = Modules/FluidLite
+	url = https://github.com/divideconcept/FluidLite.git
