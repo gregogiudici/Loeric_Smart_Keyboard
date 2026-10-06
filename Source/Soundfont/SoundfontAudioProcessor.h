@@ -66,6 +66,9 @@ public:
     /** Load a .sf2 file. Will not reload a file if it is already loaded.
     If another file is loaded, it will unload that first. */
     bool loadSoundfont (const juce::File file);
+
+    /** Load a soundfont from memory. */
+    bool loadSoundfontFromMemory (const void* data, size_t size, const juce::String& fileName);
     
     /** Sends an incoming midi message to fluidsynth */
     void processMidi (const juce::MidiMessage& message);
@@ -118,7 +121,7 @@ private:
     juce::CriticalSection lock;
     fluid_settings_t* settings;
     fluid_synth_t* synth;
-    int sfontID;
+    int sfontID = -1;
     juce::File loadedSoundfont;
 
     //==============================================================================

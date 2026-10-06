@@ -1,22 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-# The top-level CMakeLists.txt file for a project must contain a literal, direct call to the
-# `project()` command. `project()` sets up some helpful variables that describe source/binary
-# directories, and the current project version. This is a standard CMake command.
-
+# Project
 project(LOERIC_SL_LINK VERSION 0.0.1)
-
-if(NOT DEFINED VST3_COPY_DIR)
-    if(WIN32)
-        set(DEFAULT_VST3_DIR $ENV{USERPROFILE}/Documents/VST_DEBUG)
-    elseif(APPLE)
-        set(DEFAULT_VST3_DIR $ENV{HOME}/Documents/VST_DEBUG)
-    else()
-        set(DEFAULT_VST3_DIR $ENV{USERPROFILE}/.vst3_debug)
-    endif()
-    set(VST3_COPY_DIR ${DEFAULT_VST3_DIR}) # "Path to copy VST3 plugin after build"
-endif()
-message(STATUS "VST3_COPY_DIR: ${VST3_COPY_DIR}")
 
 # JUCE
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Modules/JUCE)

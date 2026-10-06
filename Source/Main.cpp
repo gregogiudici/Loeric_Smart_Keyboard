@@ -6,7 +6,10 @@
 
 #include <JuceHeader.h>
 #include <fatar_sl_link/fatar_sl_link.h>
+#include <BinaryData.h>
 
+#include "AppConfig.h"
+#include "Utils.h"
 #include "Soundfont/SoundfontAudioProcessor.h"
 
 //==============================================================================
@@ -16,18 +19,17 @@ class LoericSmartKeyboard : public juce::JUCEApplicationBase
 public:
     //==============================================================================
     LoericSmartKeyboard()
-        : processor(SF_NUM_VOICES)
-        , apvts (processor,
-                 nullptr,
-                 "Params",
-                 createParameterLayout())
-        , uiManager (processor,
-                     audioDeviceManager,
-                     "Loeric Smart Keyboard",
-                     apvts,
-                     &player.getMidiMessageCollector())
+        : processor(SF_NUM_VOICES), apvts(processor,
+                                          nullptr,
+                                          "Params",
+                                          createParameterLayout()),
+          uiManager(processor,
+                    audioDeviceManager,
+                    "Loeric Smart Keyboard",
+                    apvts,
+                    &player.getMidiMessageCollector())
     {
-        // Connect the sf2 processor to the audio player (used for the AudioIOCallback)
+        // Connect the sf2 processor to the audio player (used for the AudioIOCallback and MIDI input callbacks)
         player.setProcessor(&processor);
     }
 
@@ -40,14 +42,55 @@ public:
     //==============================================================================
     void initialise(const juce::String &commandLine) override
     {
-        // Handle application initialization
-        DBG("Application Initialised");
+        juce::Logger::writeToLog("===== LOERIC SMART KEYBOARD v0.1.0 =====");
+        config = AppConfig::parse(commandLine);
+
+        if (config.help)
+        {
+            quit();
+            return;
+        }
+
+        // --list-audio and --list-midi: utility mode, no engine started
+        if (config.listAudio)
+        {
+            listAudioDevices();
+            quit();
+            return;
+        }
+
+        if (config.listMidi)
+        {
+            listMidiDevices();
+            quit();
+            return;
+        }
+
+        if (!setupSoundfont()) { quit(); return; }
+        if (!setupAudio()) { quit(); return; }
+        if (!setupMidi()) { quit(); return; }
+
+        if (config.dryRun)
+        {
+            juce::Logger::writeToLog("Dry-run complete. Exiting.");
+            quit();
+            return;
+        }
     }
 
     void shutdown() override
     {
-        // Handle application shutdown
-        DBG("Application Shutdown");
+        if (midiIdentifier.isNotEmpty())
+        {
+            audioDeviceManager.removeMidiInputDeviceCallback(midiIdentifier, &player);
+            audioDeviceManager.setMidiInputDeviceEnabled(midiIdentifier, false);
+        }
+
+        audioDeviceManager.removeAudioCallback(&player);
+        audioDeviceManager.closeAudioDevice();
+        player.setProcessor(nullptr);
+
+        juce::Logger::writeToLog("===== SHUTDOWN, BYE! =====");
     }
 
     void anotherInstanceStarted(const juce::String &commandLine) override
@@ -73,24 +116,137 @@ public:
     void unhandledException(const std::exception *e, const juce::String &sourceFilename, int lineNumber) override
     {
         // Log the exception details
+        juce::Logger::writeToLog("Unhandled exception: " + juce::String(e->what()));
+        juce::Logger::writeToLog("  In file: " + sourceFilename);
+        juce::Logger::writeToLog("  Line: " + juce::String(lineNumber));
     }
 
 private:
     // Create the parameter layout for the audio processor
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
+        // For now an empty parameter layout.
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
         return layout;
     }
 
-    // Internal member variables
+    bool setupSoundfont()
+    {
+        if (config.soundfont.isNotEmpty())
+        {
+            juce::File f(config.soundfont);
+            if (!f.existsAsFile() || !processor.loadSoundfont(f))
+            {
+                juce::Logger::writeToLog("Could not load soundfont: " + config.soundfont);
+                return false;
+            }
+            juce::Logger::writeToLog("Soundfont: " + f.getFileName());
+            return true;
+        }
+
+        // Default: embedded Electric Piano
+        const bool ok = processor.loadSoundfontFromMemory(BinaryData::Electric_Piano_sf2,
+                                                          (size_t)BinaryData::Electric_Piano_sf2Size,
+                                                          "loeric_default.sf2");
+        juce::Logger::writeToLog(ok ? "Soundfont: default (Electric Piano)" : "Default soundfont failed to load");
+        return ok;
+    }
+
+    bool setupAudio()
+    {
+        // 0 inputs, 2 outputs. No saved state. Fall back to the default device on failure.
+        // Asking for 0 inputs also avoids the macOS microphone permission prompt.
+        auto err = audioDeviceManager.initialise(0, 2, nullptr, true);
+        if (err.isNotEmpty())
+        {
+            juce::Logger::writeToLog("Audio init error: " + err);
+            return false;
+        }
+
+        auto setup = audioDeviceManager.getAudioDeviceSetup();
+
+        // Find an output device whose name contains the requested substring
+        if (config.audioDevice.isNotEmpty())
+        {
+            bool found = false;
+
+            for (auto *type : audioDeviceManager.getAvailableDeviceTypes())
+            {
+                type->scanForDevices();
+
+                for (auto &name : type->getDeviceNames(/*wantInputNames=*/false))
+                {
+                    if (name.containsIgnoreCase(config.audioDevice))
+                    {
+                        audioDeviceManager.setCurrentAudioDeviceType(type->getTypeName(), true);
+                        setup = audioDeviceManager.getAudioDeviceSetup();
+                        setup.outputDeviceName = name;
+                        found = true;
+                        break;
+                    }
+                }
+                if (found)
+                    break;
+            }
+
+            if (!found)
+            {
+                juce::Logger::writeToLog("Audio device not found: " + config.audioDevice);
+                listAudioDevices();
+                return false;
+            }
+        }
+
+        setup.inputDeviceName = {};
+        setup.useDefaultInputChannels = false;
+        setup.inputChannels.clear();
+        setup.useDefaultOutputChannels = true;
+        setup.sampleRate = config.sampleRate;
+        setup.bufferSize = config.bufferSize;
+
+        err = audioDeviceManager.setAudioDeviceSetup(setup, /*treatAsChosenDevice=*/true);
+        if (err.isNotEmpty())
+        {
+            juce::Logger::writeToLog("Audio setup error: " + err);
+            return false;
+        }
+
+        // The processor was already attached to the player in the constructor
+        audioDeviceManager.addAudioCallback(&player);
+
+        if (auto *dev = audioDeviceManager.getCurrentAudioDevice())
+            juce::Logger::writeToLog("Audio: " + dev->getName() + " @ " + juce::String(dev->getCurrentSampleRate()) + " Hz, " + juce::String(dev->getCurrentBufferSizeSamples()) + " samples");
+        return true;
+    }
+
+    bool setupMidi()
+    {
+        for (const auto &d : juce::MidiInput::getAvailableDevices())
+        {
+            if (config.midiDevice.isEmpty() || d.name.containsIgnoreCase(config.midiDevice))
+            {
+                audioDeviceManager.setMidiInputDeviceEnabled(d.identifier, true);
+                audioDeviceManager.addMidiInputDeviceCallback(d.identifier, &player); // Attach MIDI input callback (player)
+                midiIdentifier = d.identifier;
+                juce::Logger::writeToLog("MIDI: " + d.name);
+                return true;
+            }
+        }
+
+        juce::Logger::writeToLog("MIDI device not found: " + config.midiDevice);
+        listMidiDevices();
+        return false;
+    }
+
+    //==========================================================================
+    AppConfig config;
+    juce::String midiIdentifier;
     juce::AudioDeviceManager audioDeviceManager;
-    juce::AudioProcessorPlayer player;
     SoundfontAudioProcessor processor;
     juce::AudioProcessorValueTreeState apvts;
+    juce::AudioProcessorPlayer player;
     UIManager uiManager;
 };
-
 
 //==============================================================================
 START_JUCE_APPLICATION(LoericSmartKeyboard)

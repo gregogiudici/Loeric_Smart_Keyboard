@@ -8,12 +8,13 @@ https://github.com/cpenny42/juce-soundfonts
 //==============================================================================
 //==============================================================================
 SoundfontAudioProcessor::SoundfontAudioProcessor(int numberOfVoices)
+: AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true))
 {
     settings = new_fluid_settings();
     synth = new_fluid_synth(settings);
     
     fluid_synth_set_polyphony(synth, numberOfVoices);
-    setGain(1.0f);
+    setGain(0.6f);
 }
 
 SoundfontAudioProcessor::~SoundfontAudioProcessor()
@@ -78,66 +79,48 @@ void SoundfontAudioProcessor::changeProgramName (int index, const juce::String& 
 //==============================================================================
 void SoundfontAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    juce::ignoreUnused (samplesPerBlock);
+    const juce::ScopedLock l (lock);
+    fluid_synth_set_sample_rate (synth, (float) sampleRate);
 }
 
 bool SoundfontAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-  #if JucePlugin_IsMidiEffect
-    juce::ignoreUnused (layouts);
-    return true;
-  #else
-    // This is the place where you check if the layout is supported.
-    // In this template code we only support mono or stereo.
-    // Some plugin hosts, such as certain GarageBand versions, will only
-    // load plugins that support stereo bus layouts.
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
-        return false;
-
-    // This checks if the input layout matches the output layout
-   #if ! JucePlugin_IsSynth
-    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
-        return false;
-   #endif
-
-    return true;
-  #endif
+    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
 }
 
-void SoundfontAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                              juce::MidiBuffer& midiMessages)
-{
-    juce::ignoreUnused (midiMessages);
-
-    juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    void SoundfontAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
+                                                juce::MidiBuffer& midiMessages)
     {
-        auto* channelData = buffer.getWritePointer (channel);
-        juce::ignoreUnused (channelData);
-        // ..do something to the data...
+        juce::ScopedNoDenormals noDenormals;
+        buffer.clear();
+
+        // Don't block the audio thread if a soundfont is being swapped
+        const juce::ScopedTryLock l (lock);
+        if (! l.isLocked())
+            return;
+
+        const int numSamples = buffer.getNumSamples();
+        float* left  = buffer.getWritePointer (0);
+        float* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : left;
+
+        auto render = [&] (int start, int count)
+        {
+            if (count > 0)
+                fluid_synth_write_float (synth, count, left + start, 0, 1, right + start, 0, 1);
+        };
+
+        // Sample-accurate MIDI: render up to each event, apply it, continue
+        int pos = 0;
+        for (const auto meta : midiMessages)
+        {
+            const int evPos = juce::jlimit (pos, numSamples, meta.samplePosition);
+            render (pos, evPos - pos);
+            pos = evPos;
+            processMidi (meta.getMessage());
+        }
+        render (pos, numSamples - pos);
     }
-}
 
 //==============================================================================
 bool SoundfontAudioProcessor::hasEditor() const
@@ -199,6 +182,13 @@ bool SoundfontAudioProcessor::loadSoundfont(const juce::File file)
     return (sfontID != -1);
 }
 
+bool SoundfontAudioProcessor::loadSoundfontFromMemory (const void* data, size_t size,
+                                                       const juce::String& fileName)
+{
+    auto f = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile (fileName);
+    return f.replaceWithData (data, size) && loadSoundfont (f);
+}
+
 void SoundfontAudioProcessor::processMidi (const juce::MidiMessage& message)
 {
     if (message.isNoteOn()) {
@@ -216,7 +206,6 @@ void SoundfontAudioProcessor::processMidi (const juce::MidiMessage& message)
     else if (message.isChannelPressure()) {
         channelPressure(message.getChannelPressureValue());
     }
-    // Add support for other types of MIDI messages here
 }
 
 void SoundfontAudioProcessor::noteOn (int note, int velocity, int channel)
