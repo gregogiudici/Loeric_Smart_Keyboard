@@ -11,6 +11,8 @@
 #include "AppConfig.h"
 #include "Utils.h"
 #include "Soundfont/SoundfontAudioProcessor.h"
+#include "Loeric/LoericController.h"
+#include "Loeric/LoericStore.h"
 
 //==============================================================================
 
@@ -245,6 +247,8 @@ private:
     SoundfontAudioProcessor processor;
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorPlayer player;
+    LoericStore loericStore;
+    LoericController loericController { "http://nexus-keyboard.local:8080", loericStore };
     UIManager uiManager;
 };
 
