@@ -42,7 +42,6 @@ target_compile_definitions(LoericSmartKeyboard
 # Add binary data
 juce_add_binary_data(AudioPluginData SOURCES
     # Soundfonts
-    "Assets/Soundfonts/K_Grand.sf2"
     "Assets/Soundfonts/Full Grand Piano.sf2"
 )
 
