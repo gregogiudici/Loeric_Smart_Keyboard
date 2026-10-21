@@ -13,6 +13,7 @@
 #include "Soundfont/SoundfontAudioProcessor.h"
 #include "Loeric/LoericController.h"
 #include "Loeric/LoericStore.h"
+#include "SL/CustomPages.h"
 
 //==============================================================================
 
@@ -27,7 +28,7 @@ public:
                                           createParameterLayout()),
           uiManager(processor,
                     audioDeviceManager,
-                    "Loeric Smart Keyboard",
+                    "LoericSmartKeyboard",
                     apvts,
                     &player.getMidiMessageCollector())
     {
@@ -44,7 +45,7 @@ public:
     //==============================================================================
     void initialise(const juce::String &commandLine) override
     {
-        juce::Logger::writeToLog("===== LOERIC SMART KEYBOARD v0.1.0 =====");
+        juce::Logger::writeToLog("===== LOERIC SMART KEYBOARD v0.0.1 =====");
         config = AppConfig::parse(commandLine);
 
         if (config.help)
@@ -71,6 +72,7 @@ public:
         if (!setupSoundfont()) { quit(); return; }
         if (!setupAudio()) { quit(); return; }
         if (!setupMidi()) { quit(); return; }
+        if (!setupKeyboardGUI()) { quit(); return; }
 
         if (config.dryRun)
         {
@@ -129,7 +131,52 @@ private:
     {
         // For now an empty parameter layout.
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
+
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("loeric_transpose", 0),
+        "Transpose",
+        juce::NormalisableRange<float>(),
+        0.5f,
+        AudioParameterFloatAttributes().withStringFromValueFunction([](float value, int)
+                                                                    { return String(static_cast<int>(value * 16 - 8)); })));
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("loeric_responsiveness", 0),
+        "Responsiveness",
+        juce::NormalisableRange<float>(),
+        0.5f,
+        AudioParameterFloatAttributes().withStringFromValueFunction([](auto x, auto)
+                                                                    { return String(x, 2); })));
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("loeric_third", 0),
+        "?",
+        juce::NormalisableRange<float>(),
+        0.5f,
+        AudioParameterFloatAttributes().withStringFromValueFunction([](auto x, auto)
+                                                                    { return String(static_cast<int>(x * 127)); })));
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("loeric_fourth", 0),
+        "?",
+        juce::NormalisableRange<float>(),
+        0.5f,
+        AudioParameterFloatAttributes().withStringFromValueFunction([](auto x, auto)
+                                                                    { return String(static_cast<int>(x * 127)); })));
+
+
         return layout;
+    }
+
+    bool setupLoeric()
+    {
+        // Check that the config.loericUrl is valid and if it's different from the base URL, we need to update it, by substituing the LoericController
+        if (config.loericUrl.isNotEmpty() && baseLoericUrl != config.loericUrl)
+        {
+            loericController.setUrl(config.loericUrl);
+        }
+
+        return true;
     }
 
     bool setupSoundfont()
@@ -146,11 +193,11 @@ private:
             return true;
         }
 
-        // Default: embedded Electric Piano
-        const bool ok = processor.loadSoundfontFromMemory(BinaryData::Electric_Piano_sf2,
-                                                          (size_t)BinaryData::Electric_Piano_sf2Size,
+        // Default: embedded K-Grand
+        const bool ok = processor.loadSoundfontFromMemory(BinaryData::Full_Grand_Piano_sf2,
+                                                          (size_t)BinaryData::Full_Grand_Piano_sf2Size,
                                                           "loeric_default.sf2");
-        juce::Logger::writeToLog(ok ? "Soundfont: default (Electric Piano)" : "Default soundfont failed to load");
+        juce::Logger::writeToLog(ok ? "Soundfont: default (Piano)" : "Default soundfont failed to load");
         return ok;
     }
 
@@ -240,6 +287,29 @@ private:
         return false;
     }
 
+    bool setupKeyboardGUI()
+    {
+        std::vector<juce::String> loericParamIDs = {
+            "loeric_transpose",
+            "loeric_responsiveness",
+            "loeric_fourth",
+            "loeric_third"
+        };
+        std::vector<std::unique_ptr<UIPage>> newPages;
+        newPages.push_back(std::make_unique<LoericPage>(
+            "loeric", "LOERIC", "", "LOERIC", juce::Colours::lightcoral,
+            loericParamIDs, uiManager.slLinkManager, apvts));
+
+        newPages.back()->buttonToPageIndex = {
+            {slmk2::SLButton::HOME, 0},
+            {slmk2::SLButton::DAW, 1},
+            {slmk2::SLButton::GLOBAL, 2}};
+
+        uiManager.setPages(std::move(newPages));
+        uiManager.setCurrentPage(0);
+        return true;
+    }
+
     //==========================================================================
     AppConfig config;
     juce::String midiIdentifier;
@@ -248,7 +318,8 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorPlayer player;
     LoericStore loericStore;
-    LoericController loericController { "http://nexus-keyboard.local:8080", loericStore };
+    juce::String baseLoericUrl = "http://nexus-keyboard.local:8080";
+    LoericController loericController { baseLoericUrl, loericStore };
     UIManager uiManager;
 };
 

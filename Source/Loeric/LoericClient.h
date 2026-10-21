@@ -25,6 +25,21 @@ public:
     {
     }
 
+    void setBaseUrl (const juce::String& serverAddress)
+    {
+        const auto normalised =
+            serverAddress.trim().trimCharactersAtEnd ("/");
+
+        const juce::ScopedLock lock (baseUrlLock);
+        baseUrl = normalised;
+    }
+
+    juce::String getBaseUrl() const
+    {
+        const juce::ScopedLock lock (baseUrlLock);
+        return baseUrl;
+    }
+
     Response status() const
     {
         return request ("GET", "/api/status");
@@ -120,7 +135,7 @@ private:
     {
         Response result;
 
-        juce::URL url (baseUrl + path);
+        juce::URL url (getBaseUrl() + path);
 
         const bool hasBody = jsonBody.isNotEmpty();
 
@@ -161,5 +176,6 @@ private:
         return result;
     }
 
+    mutable juce::CriticalSection baseUrlLock;
     juce::String baseUrl;
 };

@@ -16,6 +16,7 @@ juce_add_module(${CMAKE_CURRENT_SOURCE_DIR}/Modules/fatar_sl_link)
 # LOERIC Smart Keyboard
 juce_add_console_app(LoericSmartKeyboard
     PRODUCT_NAME "LOERIC Smart Keyboard"
+    MANUFACTURER_NAME "gregogiudici"
 )
 
 # Generate JuceHeader.h
@@ -41,16 +42,8 @@ target_compile_definitions(LoericSmartKeyboard
 # Add binary data
 juce_add_binary_data(AudioPluginData SOURCES
     # Soundfonts
-    "Assets/Soundfonts/Clarinet.sf2"
-    "Assets/Soundfonts/Electric Piano.sf2"
-    "Assets/Soundfonts/Harmonica.sf2"
-    "Assets/Soundfonts/Mellopad.sf2"
-    "Assets/Soundfonts/Oohs.sf2"
-    "Assets/Soundfonts/Sawtooth Pad.sf2"
-    "Assets/Soundfonts/Slap Bass.sf2"
-    "Assets/Soundfonts/Tenor Saxophone.sf2"
-    "Assets/Soundfonts/Theremin.sf2"
-    "Assets/Soundfonts/Trombone.sf2"
+    "Assets/Soundfonts/K_Grand.sf2"
+    "Assets/Soundfonts/Full Grand Piano.sf2"
 )
 
 # Link libraries

@@ -14,7 +14,8 @@ struct AppConfig
     juce::String audioDevice; // substring match; empty = first available
     juce::String midiDevice;  // substring match; empty = first available
     double sampleRate = 44100.0;
-    int bufferSize = 512;
+    int bufferSize = 256;
+    juce::String loericUrl = "http://localhost:8080";
     juce::String soundfont;
 
     static AppConfig parse(const juce::String &commandLine)
@@ -53,12 +54,13 @@ struct AppConfig
                 juce::Logger::writeToLog("Usage:");
                 juce::Logger::writeToLog("  LoericSmartKeyboard [options]");
                 juce::Logger::writeToLog("Options:");
+                juce::Logger::writeToLog("  --loeric <url>            Url of Loeric server to connect to (default: http://localhost:8080)");
                 juce::Logger::writeToLog("  --list-audio              List available audio input/output devices and exit");
                 juce::Logger::writeToLog("  --list-midi               List available MIDI input devices and exit");
                 juce::Logger::writeToLog("  --audio-device <name>     Use the audio device whose name contains <name>");
                 juce::Logger::writeToLog("  --midi-device <name>      Use the MIDI device whose name contains <name>");
                 juce::Logger::writeToLog("  --sample-rate <rate>      Sample rate in Hz (default: 44100)");
-                juce::Logger::writeToLog("  --buffer-size <samples>   Buffer size in samples (default: 512)");
+                juce::Logger::writeToLog("  --buffer-size <samples>   Buffer size in samples (default: 256)");
                 juce::Logger::writeToLog("  --soundfont <file>        Load the specified soundfont file");
                 juce::Logger::writeToLog("  --dry-run                 Validate device availability, print resolved config, then exit");
                 juce::Logger::writeToLog("  --help                    Show this help message and exit");
