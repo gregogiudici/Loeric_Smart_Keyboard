@@ -73,6 +73,7 @@ public:
         if (!setupAudio()) { quit(); return; }
         if (!setupMidi()) { quit(); return; }
         if (!setupKeyboardGUI()) { quit(); return; }
+        if (!setupLoeric()) { quit(); return; }
 
         if (config.dryRun)
         {
@@ -93,6 +94,7 @@ public:
         audioDeviceManager.removeAudioCallback(&player);
         audioDeviceManager.closeAudioDevice();
         player.setProcessor(nullptr);
+        loericStore.removeListener(&printingListener);
 
         juce::Logger::writeToLog("===== SHUTDOWN, BYE! =====");
     }
@@ -174,6 +176,14 @@ private:
         if (config.loericUrl.isNotEmpty() && baseLoericUrl != config.loericUrl)
         {
             loericController.setUrl(config.loericUrl);
+        }
+
+        loericStore.addListener(&printingListener);
+
+        if (!loericController.start())
+        {
+            juce::Logger::writeToLog("Could not start the LOERIC controller thread");
+            return false;
         }
 
         return true;
@@ -289,21 +299,11 @@ private:
 
     bool setupKeyboardGUI()
     {
-        std::vector<juce::String> loericParamIDs = {
-            "loeric_transpose",
-            "loeric_responsiveness",
-            "loeric_fourth",
-            "loeric_third"
-        };
         std::vector<std::unique_ptr<UIPage>> newPages;
         newPages.push_back(std::make_unique<LoericPage>(
-            "loeric", "LOERIC", "", "LOERIC", juce::Colours::lightcoral,
-            loericParamIDs, uiManager.slLinkManager, apvts));
-
-        newPages.back()->buttonToPageIndex = {
-            {slmk2::SLButton::HOME, 0},
-            {slmk2::SLButton::DAW, 1},
-            {slmk2::SLButton::GLOBAL, 2}};
+            "loeric", "LOERIC", "LOERIC",
+            uiManager.slLinkManager, apvts,
+            loericStore, loericController, processor));
 
         uiManager.setPages(std::move(newPages));
         uiManager.setCurrentPage(0);
@@ -318,8 +318,9 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorPlayer player;
     LoericStore loericStore;
-    juce::String baseLoericUrl = "http://nexus-keyboard.local:8080";
+    juce::String baseLoericUrl = "http://localhost:8080";
     LoericController loericController { baseLoericUrl, loericStore };
+    PrintingListener printingListener;
     UIManager uiManager;
 };
 

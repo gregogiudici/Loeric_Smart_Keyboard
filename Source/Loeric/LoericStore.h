@@ -112,3 +112,48 @@ private:
 
     JUCE_DECLARE_WEAK_REFERENCEABLE (LoericStore)
 };
+
+// Helper class to print state changes
+struct PrintingListener : public LoericStore::Listener
+{
+    std::function<void (const std::vector<LoericState::Tune>&)> onTunes;
+
+    void loericConnectionChanged (bool connected, const juce::String& error) override
+    {
+        juce::Logger::writeToLog(connected ? "[connection] CONNECTED" : "[connection] DISCONNECTED (" + error + ")");
+    }
+
+    void loericStatusChanged (const LoericState::Status& s, const LoericState::Status::Change& c) override
+    {
+        juce::Logger::writeToLog("[status] running=" + juce::String (s.running ? "yes" : "no")
+             + " tune='" + s.currentTune + "' config='" + s.currentConfig + "' instrument='" + s.currentInstrument + "'"
+             + "  changed: run=" + juce::String ((int) c.running) + " tune=" + juce::String ((int) c.tune)
+             + " params=[" + c.parameters.joinIntoString (", ") + "]");
+
+        for (const auto& [key, value] : s.parameters)
+            if (c.parameters.contains (key))
+                juce::Logger::writeToLog("            " + key + " = " + juce::JSON::toString (value, true));
+    }
+
+    void loericTunesChanged (const std::vector<LoericState::Tune>& t) override
+    {
+        for (const auto& x : t) juce::Logger::writeToLog("[tune] " + x.id + " | " + x.name + " | " + x.path);
+
+        if (onTunes)
+            onTunes (t);
+    }
+
+    void loericInstrumentsChanged (const std::vector<LoericState::Instrument>& i) override
+    {
+        for (const auto& x : i) juce::Logger::writeToLog("[instrument] " + x.id + " | " + x.name);
+    }
+
+    void loericConfigsChanged (const juce::String& tuneId, const LoericState::Configs& c) override
+    {
+        juce::StringArray ids;
+        for (const auto& x : c.list) ids.add (x.id);
+
+        juce::Logger::writeToLog("[configs '" + tuneId + "'] default=" + (c.defaultConfig ? c.defaultConfig->id : juce::String ("(none)"))
+             + " list=[" + ids.joinIntoString (", ") + "]");
+    }
+};
