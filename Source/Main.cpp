@@ -178,6 +178,8 @@ private:
             loericController.setUrl(config.loericUrl);
         }
 
+        juce::Logger::writeToLog("LOERIC server: " + (config.loericUrl.isNotEmpty() ? config.loericUrl : baseLoericUrl));
+
         loericStore.addListener(&printingListener);
 
         if (!loericController.start())

@@ -47,6 +47,14 @@ struct AppConfig
                 cfg.sampleRate = tokens[++i].getDoubleValue();
             else if (t == "--buffer-size" && i + 1 < tokens.size())
                 cfg.bufferSize = tokens[++i].getIntValue();
+            else if (t == "--loeric" && i + 1 < tokens.size())
+            {
+                // Accept "host:port" as well as a full URL.
+                auto url = tokens[++i].trim();
+                if (!url.containsIgnoreCase("://"))
+                    url = "http://" + url;
+                cfg.loericUrl = url;
+            }
             else if (t == "--soundfont" && i + 1 < tokens.size())
                 cfg.soundfont = tokens[++i];
             else if (t == "--help")
