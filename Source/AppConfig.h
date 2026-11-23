@@ -21,7 +21,11 @@ struct AppConfig
     static AppConfig parse(const juce::String &commandLine)
     {
         AppConfig cfg;
-        const auto tokens = juce::StringArray::fromTokens(commandLine, " ", "\"");
+        // JUCE re-quotes arguments that contain spaces ("SL AUDIO"), and fromTokens keeps the quotes:
+        // strip them, otherwise device names / paths with spaces never match.
+        auto tokens = juce::StringArray::fromTokens(commandLine, " ", "\"");
+        for (auto &token : tokens)
+            token = token.unquoted();
 
         for (int i = 0; i < tokens.size(); ++i)
         {
