@@ -117,8 +117,11 @@ public:
     fluid_settings_t* getSettings() { return settings; }
     
 private:
+    void rebuildSynth (double sampleRate);
 
     juce::CriticalSection lock;
+    int numVoices;
+    double synthSampleRate = 44100.0; // FluidLite's default
     fluid_settings_t* settings;
     fluid_synth_t* synth;
     int sfontID = -1;

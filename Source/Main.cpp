@@ -215,18 +215,10 @@ private:
 
     bool setupAudio()
     {
-        // 0 inputs, 2 outputs. No saved state. Fall back to the default device on failure.
-        // Asking for 0 inputs also avoids the macOS microphone permission prompt.
-        auto err = audioDeviceManager.initialise(0, 2, nullptr, true);
-        if (err.isNotEmpty())
-        {
-            juce::Logger::writeToLog("Audio init error: " + err);
-            return false;
-        }
+        juce::AudioDeviceManager::AudioDeviceSetup setup;
 
-        auto setup = audioDeviceManager.getAudioDeviceSetup();
-
-        // Find an output device whose name contains the requested substring
+        // Find an output device whose name contains the requested substring. This happens before anything
+        // is opened: the default device may be unusable (e.g. HDMI without a display on a Raspberry Pi).
         if (config.audioDevice.isNotEmpty())
         {
             bool found = false;
@@ -240,7 +232,6 @@ private:
                     if (name.containsIgnoreCase(config.audioDevice))
                     {
                         audioDeviceManager.setCurrentAudioDeviceType(type->getTypeName(), true);
-                        setup = audioDeviceManager.getAudioDeviceSetup();
                         setup.outputDeviceName = name;
                         found = true;
                         break;
@@ -265,7 +256,9 @@ private:
         setup.sampleRate = config.sampleRate;
         setup.bufferSize = config.bufferSize;
 
-        err = audioDeviceManager.setAudioDeviceSetup(setup, /*treatAsChosenDevice=*/true);
+        // 0 inputs, 2 outputs. No saved state. An empty output name means the default device.
+        // Asking for 0 inputs also avoids the macOS microphone permission prompt.
+        const auto err = audioDeviceManager.initialise(0, 2, nullptr, /*selectDefaultDeviceOnFailure=*/false, {}, &setup);
         if (err.isNotEmpty())
         {
             juce::Logger::writeToLog("Audio setup error: " + err);

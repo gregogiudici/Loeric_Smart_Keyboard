@@ -188,8 +188,6 @@ void LoericPage::drawContent()
         {
             const auto &c = configs[(size_t)configBrowse];
             text = c.name.isNotEmpty() ? c.name : c.id;
-            if (c.id == defaultConfigId)
-                text << " (default)";
         }
 
         juce::String empty = selectedTuneId.isEmpty()                       ? "Select a tune first"
@@ -609,13 +607,21 @@ void LoericPage::handleApply()
     if (selectedTuneId.isEmpty())   { showMessage("Select a tune first");  return; }
     if (selectedModelId.isEmpty())  { showMessage("Select a model first"); return; }
 
+    // Without the config list we don't know the tune's default config yet.
+    if (store.getState().findConfigs(selectedTuneId) == nullptr)
+    {
+        controller.requestConfigs(selectedTuneId);
+        showMessage("Loading configs, try again");
+        return;
+    }
+
     // Send pending knob values first so the start request and the live values agree.
     sendDirtyValues();
 
     auto *o = new juce::DynamicObject();
     o->setProperty("tune", selectedTuneId);
-    if (selectedConfigId.isNotEmpty())
-        o->setProperty("config", selectedConfigId);
+    // "config" is a required field on the server: null means "no extra config" (it is not optional to send it).
+    o->setProperty("config", selectedConfigId.isNotEmpty() ? juce::var(selectedConfigId) : juce::var());
     o->setProperty("instrument_model", selectedModelId);
     o->setProperty("repetitions", repetitions);
     o->setProperty("transpose", juce::roundToInt(knobs[KnobTranspose].value));
@@ -884,22 +890,21 @@ void LoericPage::rebuildConfigList()
     if (c == nullptr)
         return;
 
-    configs = c->list;
-
+    // "Default" is always the first entry, like in the web UI: the tune's default config if it has one,
+    // otherwise an empty id (sent as null = base + tune type + instrument only).
     if (c->defaultConfig)
-    {
         defaultConfigId = c->defaultConfig->id;
 
-        const bool listed = std::any_of(configs.begin(), configs.end(),
-                                        [this](const auto &x) { return x.id == defaultConfigId; });
-        if (!listed)
-            configs.insert(configs.begin(), *c->defaultConfig);
-    }
+    configs.push_back({defaultConfigId, "Default"});
+
+    for (const auto &config : c->list)
+        if (config.id != defaultConfigId)
+            configs.push_back(config);
 
     const bool selectionValid = std::any_of(configs.begin(), configs.end(),
                                             [this](const auto &x) { return x.id == selectedConfigId; });
     if (!selectionValid)
-        selectedConfigId = defaultConfigId; // empty = let the server use its default
+        selectedConfigId = defaultConfigId; // nothing (valid) chosen: use "Default"
 
     for (size_t i = 0; i < configs.size(); ++i)
         if (configs[i].id == selectedConfigId)

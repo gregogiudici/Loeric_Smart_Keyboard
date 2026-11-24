@@ -190,7 +190,7 @@ with the message "Locked while playing".
 |---|---|
 | Tune | Tunes from `/api/tunes`; dot-files are hidden. Confirming a tune loads its configurations. |
 | Model | Instrument models from `/api/instruments` |
-| Config | Configurations for the selected tune from `/api/configs/{tune}`; the default is pre-selected |
+| Config | Configurations for the selected tune from `/api/configs/{tune}`, after a "Default" entry that is pre-selected |
 | Repeat | Number of score repetitions, from 1 to 99 |
 
 A highlighted list item is white until confirmed. The confirmed item is drawn in the current

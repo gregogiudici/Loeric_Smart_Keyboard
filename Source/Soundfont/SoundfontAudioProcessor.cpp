@@ -8,7 +8,8 @@ https://github.com/cpenny42/juce-soundfonts
 //==============================================================================
 //==============================================================================
 SoundfontAudioProcessor::SoundfontAudioProcessor(int numberOfVoices)
-: AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+: AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+  numVoices (numberOfVoices)
 {
     settings = new_fluid_settings();
     synth = new_fluid_synth(settings);
@@ -81,7 +82,27 @@ void SoundfontAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
 {
     juce::ignoreUnused (samplesPerBlock);
     const juce::ScopedLock l (lock);
-    fluid_synth_set_sample_rate (synth, (float) sampleRate);
+
+    if (! juce::exactlyEqual (sampleRate, synthSampleRate))
+        rebuildSynth (sampleRate);
+}
+
+// FluidLite's fluid_synth_set_sample_rate() ignores its argument (it rebuilds the voices at the old rate),
+// so the pitch is wrong at any rate other than 44.1 kHz. The rate only takes effect when the synth is created.
+void SoundfontAudioProcessor::rebuildSynth (double sampleRate)
+{
+    const float gain = fluid_synth_get_gain (synth);
+
+    delete_fluid_synth (synth);
+    fluid_settings_setnum (settings, "synth.sample-rate", sampleRate);
+    synth = new_fluid_synth (settings);
+    synthSampleRate = sampleRate;
+
+    fluid_synth_set_polyphony (synth, numVoices);
+    fluid_synth_set_gain (synth, gain);
+
+    if (loadedSoundfont != juce::File())
+        sfontID = fluid_synth_sfload (synth, loadedSoundfont.getFullPathName().toRawUTF8(), true);
 }
 
 bool SoundfontAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const

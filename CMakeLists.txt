@@ -26,7 +26,7 @@ juce_generate_juce_header(LoericSmartKeyboard)
 target_sources(LoericSmartKeyboard
     PRIVATE
     Source/Main.cpp
-    Source/SoundFont/SoundfontAudioProcessor.cpp
+    Source/Soundfont/SoundfontAudioProcessor.cpp
     Source/SL/CustomPages.cpp
 )
 
